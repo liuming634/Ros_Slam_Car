@@ -1,19 +1,14 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 import os
 
+
 def generate_launch_description():
-    # Get the path to the package share directory
-    pkg_share = os.getenv('AMENT_PREFIX_PATH').split(':')[0] if 'AMENT_PREFIX_PATH' in os.environ else ''
-    pkg_share = os.path.join(pkg_share, 'share', 'camera')
-
-    # Fallback to local path if AMENT_PREFIX_PATH is not set
-    if not os.path.exists(os.path.join(pkg_share, 'config', 'camera_params.yaml')):
-        pkg_share = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+    # 通过 ament_index 获取 camera 包的共享目录（source 后稳定可用）
+    pkg_share = get_package_share_directory('camera')
     params_file = os.path.join(pkg_share, 'config', 'camera_params.yaml')
 
-    # Create node
     camera_node = Node(
         package='camera',
         executable='camera_node',

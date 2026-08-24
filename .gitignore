@@ -1,0 +1,20 @@
+# ==== colcon / ROS2 构建产物 ====
+/build/
+/install/
+/log/
+
+# ==== Python ====
+__pycache__/
+*.py[cod]
+
+# ==== 编辑器 / 工具本地配置 ====
+.vscode/
+.claude/
+*.swp
+*~
+
+# ==== 运行时数据（VINS 轨迹输出等） ====
+/data/vins_output/
+
+# ==== 其它 ====
+*.csv.bak

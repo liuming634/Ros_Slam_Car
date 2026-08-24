@@ -19,7 +19,8 @@ find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 pkg_check_modules(LIBSODIUM REQUIRED libsodium)
-find_package(FFMPEG REQUIRED)
+# FFmpeg 不提供 CMake 配置文件，用 pkg-config 查找（fpv 解码用到 libavcodec/libavformat/libswscale）
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libswscale libavutil)
 
 include_directories(
   fpv/include
@@ -30,35 +31,41 @@ include_directories(
   ${FFMPEG_INCLUDE_DIRS}
 )
 
-# Create FPV receiver library
-add_library(fpvrx
-  fpv/src/receiver.cpp
-  fpv/src/FrameParser.cpp
-  fpv/src/WFBProcessor.cpp
-  fpv/src/RtlUsbAdapter.cpp
-  fpv/src/Rtl8812aDevice.cpp
-  fpv/src/WiFiDriver.cpp
-  fpv/src/RadioManagementModule.cpp
-  fpv/src/HalModule.cpp
-  fpv/src/fec.c
-  fpv/src/FirmwareManager.cpp
-  fpv/src/EepromManager.cpp
-  fpv/src/hal/Hal8812PwrSeq.c
-  fpv/src/hal/hal8812a_fw.c
-)
+# FPV WFB 接收端（fpv/）暂未启用：
+#   当前相机走 USB UVC（camera_source: usb），fpv 分支尚未实现，此库不被 camera_node 调用。
+#   该库依赖 C++20（std::span 等），启用时需把 CMAKE_CXX_STANDARD 提到 20 并修复可能的编译问题。
+option(BUILD_FPV_RX "构建 FPV WFB 接收库" OFF)
 
-target_link_libraries(fpvrx
-  ${OpenCV_LIBRARIES}
-  ${LIBUSB_LIBRARIES}
-  ${LIBSODIUM_LIBRARIES}
-  ${FFMPEG_LIBRARIES}
-)
+if(BUILD_FPV_RX)
+  # Create FPV receiver library
+  add_library(fpvrx
+    fpv/src/receiver.cpp
+    fpv/src/FrameParser.cpp
+    fpv/src/WFBProcessor.cpp
+    fpv/src/RtlUsbAdapter.cpp
+    fpv/src/Rtl8812aDevice.cpp
+    fpv/src/WiFiDriver.cpp
+    fpv/src/RadioManagementModule.cpp
+    fpv/src/HalModule.cpp
+    fpv/src/fec.c
+    fpv/src/FirmwareManager.cpp
+    fpv/src/EepromManager.cpp
+    fpv/include/hal/Hal8812PwrSeq.c
+    fpv/include/hal/hal8812a_fw.c
+  )
+
+  target_link_libraries(fpvrx
+    ${OpenCV_LIBRARIES}
+    ${LIBUSB_LIBRARIES}
+    ${LIBSODIUM_LIBRARIES}
+    ${FFMPEG_LIBRARIES}
+  )
+endif()
 
 # Create camera node
 add_executable(camera_node src/camera_node.cpp)
 
 target_link_libraries(camera_node
-  fpvrx
   ${ament_LIBRARIES}
   ${rclcpp_LIBRARIES}
   ${sensor_msgs_LIBRARIES}
@@ -76,12 +83,19 @@ ament_target_dependencies(camera_node
 # Install
 install(TARGETS
   camera_node
-  fpvrx
   DESTINATION lib/${PROJECT_NAME}
 )
 
+if(BUILD_FPV_RX)
+  install(TARGETS
+    fpvrx
+    DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
+
 install(DIRECTORY
   launch
+  config
   DESTINATION share/${PROJECT_NAME}
 )
 

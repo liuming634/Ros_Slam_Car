@@ -1,35 +1,26 @@
-camera_fourcc: MJPG
-camera_fps: 30
-camera_height: 1080
-camera_hflip: false
-camera_id: 0
-camera_matrix_file: calibration_data/camera_matrix.npy
-camera_source: usb
-camera_vflip: false
-camera_width: 1920
-coord_offset_x_mm: 0.0
-coord_offset_y_mm: 0.0
-coordinate_offset: 5000
-coordinate_scale: 1000
-dist_coeffs_file: calibration_data/dist_coeffs.npy
-fps_display: true
-fpv_channel: 161
-fpv_channel_width: 20
-fpv_codec: h265
-fpv_fps: 60
-fpv_height: 1080
-fpv_key: gs.key
-fpv_link_id: 7669206
-fpv_width: 1920
-grab_range_radius_ratio: 0.486
-grab_range_x_ratio: 0.5
-grab_range_y_ratio: 0.647
-grid_crop_ratio: 1.0
-gui_mode: '3'
-homography_file: calibration_data/homography.npy
-serial_baudrate: 9600
-serial_port: /dev/ttyUSB0
-serial_prefix: 4660
-serial_timeout: 0.1
-show_overlays: true
-timer_interval: 30
+# camera_node 参数配置
+# 与 src/hardware/camera/src/camera_node.cpp 中 declare_parameter 保持一一对应
+# 节点名前缀与 launch/camera_launch.py 及 launch/vi_car.launch.py 中的 name='camera_node' 一致
+camera_node:
+  ros__parameters:
+    # 相机来源：usb = 普通 UVC 摄像头（FPV 图传接收端即为此）；fpv = 未实现（占位）
+    camera_source: usb
+    # USB 相机参数
+    camera_id: 0
+    # 分辨率与 config/vi_car/cam0_pinhole.yaml 标定一致
+    camera_width: 640
+    camera_height: 480
+    camera_fps: 30
+    camera_hflip: false
+    camera_vflip: false
+    # 畸变校正文件（未启用，预留）
+    camera_matrix_file: calibration_data/camera_matrix.npy
+    dist_coeffs_file: calibration_data/dist_coeffs.npy
+    # FPV 参数（接收端走 USB 时不生效，预留）
+    fpv_key: gs.key
+    fpv_channel: 161
+    fpv_channel_width: 20
+    fpv_codec: h265
+    fpv_width: 1920
+    fpv_height: 1080
+    fpv_fps: 60

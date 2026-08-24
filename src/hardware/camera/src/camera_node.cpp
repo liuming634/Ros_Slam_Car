@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/header.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 #include <string>
@@ -50,11 +51,8 @@ public:
             cap_.set(cv::CAP_PROP_FRAME_WIDTH, camera_width);
             cap_.set(cv::CAP_PROP_FRAME_HEIGHT, camera_height);
             cap_.set(cv::CAP_PROP_FPS, camera_fps);
-            cap_.set(cv::CAP_PROP_MODE, cv::CAP_MODE_VIDEO);
-
-            // Set flip properties if supported
-            cap_.set(cv::CAP_PROP_HFLIP, camera_hflip ? 1 : 0);
-            cap_.set(cv::CAP_PROP_VFLIP, camera_vflip ? 1 : 0);
+            // 注：CAP_PROP_HFLIP/VFLIP 在本机 OpenCV 4.5.4 中不存在，
+            //     翻转已在 timer_callback 中通过 cv::flip 手动处理。
         }
         else if (camera_source == "fpv")
         {
@@ -115,9 +113,11 @@ private:
         }
 
         // Convert to ROS message
+        std_msgs::msg::Header header;
+        header.stamp = this->get_clock()->now();
+        header.frame_id = "camera_link";
         sensor_msgs::msg::Image::SharedPtr msg = cv_bridge::CvImage(
-            this->get_clock()->now(), "bgr8", frame).toImageMsg();
-        msg->header.frame_id = "camera_link";
+            header, "bgr8", frame).toImageMsg();
 
         // Publish message
         image_pub_->publish(*msg);

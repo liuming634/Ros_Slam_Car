@@ -29,3 +29,7 @@ slam/
 2.  修改config/slam_params.yaml配置文件，设置SLAM算法参数
 3.  编译并启动SLAM节点：`ros2 launch slam slam_launch.py`
 4.  查看位姿和地图话题：`ros2 topic list | grep odom map`
+## VINS-Fusion 源码来源
+
+- `VINS-Fusion-ROS2-humble/` 为 vendored 代码（无嵌套 .git），上游：https://github.com/zinuok/VINS-Fusion-ROS2
+- 小车自身的 VINS 配置（纯视觉单目）在顶层 `config/vi_car/`，不随包内源码管理
