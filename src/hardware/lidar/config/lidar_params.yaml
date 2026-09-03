@@ -1,0 +1,19 @@
+# ============================================================
+# lidar_node 参数
+# ============================================================
+lidar_node:
+  ros__parameters:
+    # 数据源：sim=模拟（无硬件联调用），serial=真串口雷达（驱动待实现）
+    lidar_source: "sim"
+
+    # 输出坐标系（与 urdf/vi_car.urdf 的 laser_link 保持一致）
+    frame_id: "laser_link"
+
+    # 发布频率与量程
+    scan_fps: 10
+    range_min: 0.15
+    range_max: 12.0
+
+    # 串口模式参数（接入 RPLIDAR 等真雷达时配置）
+    serial_port: "/dev/ttyUSB0"
+    baud_rate: 115200
