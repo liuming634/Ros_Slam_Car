@@ -18,6 +18,7 @@ tmp/
 
 # ==== 运行时数据（VINS 轨迹输出等） ====
 /data/vins_output/
+/sensor/
 
 # ==== 其它 ====
 *.csv.bak
