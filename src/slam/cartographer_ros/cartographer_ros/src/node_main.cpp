@@ -23,28 +23,21 @@
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_ros/transform_listener.h"
 
-DEFINE_bool(collect_metrics, false,
-            "Activates the collection of runtime metrics. If activated, the "
-            "metrics can be accessed via a ROS service.");
-DEFINE_string(configuration_directory, "",
-              "First directory in which configuration files are searched, "
-              "second is always the Cartographer installation to allow "
-              "including files from there.");
+// Yb 本项目适配：以下 gflags 在 offline_node.cpp 已 DEFINE，同一符号域重复定义
+// 会触发 "flag was defined more than once" 启动失败，这里改为 extern 引用。
+// Yb 本项目适配：以下 gflags 在 offline_node.cpp 已 DEFINE（两者链接进同一符号
+// 域会触发 "flag was defined more than once" 启动失败），此处只声明不定义。
+DECLARE_bool(collect_metrics);
+DECLARE_string(configuration_directory);
 DEFINE_string(configuration_basename, "",
               "Basename, i.e. not containing any directory prefix, of the "
               "configuration file.");
-DEFINE_string(load_state_filename, "",
-              "If non-empty, filename of a .pbstream file to load, containing "
-              "a saved SLAM state.");
-DEFINE_bool(load_frozen_state, true,
-            "Load the saved state as frozen (non-optimized) trajectories.");
+DECLARE_string(load_state_filename);
+DECLARE_bool(load_frozen_state);
+DECLARE_string(save_state_filename);
 DEFINE_bool(
     start_trajectory_with_default_topics, true,
     "Enable to immediately start the first trajectory with default topics.");
-DEFINE_string(
-    save_state_filename, "",
-    "If non-empty, serialize state and write it to disk before shutting down.");
-
 namespace cartographer_ros {
 namespace {
 
