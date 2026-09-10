@@ -27,7 +27,7 @@ camera_node(/camera/image_raw)   ← 保留接口，Cartographer 不消费
 ### 启动方式
 
 ```bash
-cd /home/lm/Ubuntu/code/ros_slam_car
+cd /home/lm/Ubuntu/code/Ros_Slam_Car
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash

@@ -10,6 +10,9 @@ __pycache__/
 # ==== 编辑器 / 工具本地配置 ====
 .vscode/
 .claude/
+.marscode/
+.opencode/
+tmp/
 *.swp
 *~
 

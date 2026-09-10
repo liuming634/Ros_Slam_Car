@@ -55,7 +55,7 @@ map(全局) -> odom(cartographer 发布) -> base_link -> laser_link
 
 ```bash
 # 构建工作区（首次，含 vendored cartographer_ros 3 个包）
-cd /home/lm/Ubuntu/code/ros_slam_car
+cd /home/lm/Ubuntu/code/Ros_Slam_Car
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
