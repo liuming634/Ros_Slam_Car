@@ -12,16 +12,16 @@
 - 数据链路（雷达为主，保留相机/IMU 接口）：
 
 ```
-lidar_node(/scan) ─┐
-imu_node(/imu/data)├─> cartographer_node -> /map + /tf(map->odom->base_link)
+ydlidar_ros2_driver(/scan, laser_link)      ─┐
+ybimu_driver -> madgwick(/imu/data, imu_link)├─> cartographer_node -> /map + /tf(map->odom->base_link)
 camera_node(/camera/image_raw)   ← 保留接口，Cartographer 不消费
 ```
 
 - 启动方式：顶层 `launch/cartographer.launch.py`（一键启动 SLAM + 雷达 + IMU + 相机 + TF）。
 - **备选 SLAM：VINS-Fusion**（视觉惯性），源码在 `VINS-Fusion-ROS2-humble/`，
   用顶层 `launch/vi_car.launch.py` 单独启动（相机 + VINS）。
-- **⚠️ 注意**：`lidar_node` / `imu_node` 目前是 **sim 模拟模式**（无硬件也能跑通链路）；
-  接入真实雷达 / IMU 后在 `src/hardware/lidar`、`src/hardware/imu` 里实现串口驱动。
+- **真实硬件驱动**：已接入 YDLidar X3（`src/hardware/ydlidar_ros2_driver`）
+  与 YbImu（`src/hardware/imu_ros2_device`），udev 固定 `/dev/ydlidar` / `/dev/myimu`。
 
 ---
 

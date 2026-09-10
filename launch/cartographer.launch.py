@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import os
 
@@ -9,14 +9,6 @@ import os
 def generate_launch_description():
     # 项目根目录（本文件位于 <repo>/launch/ 下）
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    # imu_source_hardware/sim：结合 imu_source 与 use_imu 的条件表达式
-    imu_source_hardware = PythonExpression(
-        ["'", LaunchConfiguration('imu_source'), "' == 'hardware' and '",
-         LaunchConfiguration('use_imu'), "' == 'true'"])
-    imu_source_sim = PythonExpression(
-        ["'", LaunchConfiguration('imu_source'), "' == 'sim' and '",
-         LaunchConfiguration('use_imu'), "' == 'true'"])
 
     # Cartographer 项目级配置（lua，include 的 map_builder.lua 等自动从
     # cartographer 安装目录解析，无需手动复制）
@@ -38,11 +30,6 @@ def generate_launch_description():
     use_lidar = LaunchConfiguration('use_lidar', default='true')
     use_camera = LaunchConfiguration('use_camera', default='true')
     use_imu = LaunchConfiguration('use_imu', default='true')
-    # IMU 数据源：hardware=真实 YbImu（imu_ros2_device + madgwick 滤波链），
-    # sim=模拟占位 imu_node（无硬件时联调用）
-    imu_source = LaunchConfiguration('imu_source', default='sim')
-    # 雷达数据源：hardware=真实 YDLidar（ydlidar_ros2_driver），sim=模拟占位 lidar_node
-    lidar_source = LaunchConfiguration('lidar_source', default='sim')
 
     # 硬件 IMU 滤波参数（imu_ros2_device 包内配置）
     from ament_index_python.packages import get_package_share_directory
@@ -53,13 +40,13 @@ def generate_launch_description():
     ydlidar_params = os.path.join(
         get_package_share_directory('ydlidar_ros2_driver'), 'params', 'ydlidar_x3.yaml')
 
-    # ---------- 硬件 IMU 链：ybimu_driver(/imu/data_raw,/imu/mag) -> madgwick(/imu/data) ----------
+    # ---------- IMU 链：ybimu_driver(/imu/data_raw,/imu/mag) -> madgwick(/imu/data) ----------
     ybimu_driver_node = Node(
         package='imu_ros2_device',
         executable='ybimu_driver',
         name='ybimu_node',
         output='screen',
-        condition=IfCondition(imu_source_hardware),
+        condition=IfCondition(use_imu),
     )
 
     imu_filter_node = Node(
@@ -68,10 +55,10 @@ def generate_launch_description():
         name='imu_filter_madgwick',
         output='screen',
         parameters=[imu_filter_params],
-        condition=IfCondition(imu_source_hardware),
+        condition=IfCondition(use_imu),
     )
 
-    # ---------- 硬件雷达链：ydlidar_ros2_driver_node -> /scan ----------
+    # ---------- 雷达链：ydlidar_ros2_driver_node -> /scan ----------
     # frame_id=laser_link 与 urdf/vi_car.urdf 的 base_link->laser_link 一致，
     # 驱动自身不发布 TF，由 robot_state_publisher 统一提供（与例程注释掉的 tf2 一致）
     ydlidar_node = Node(
@@ -80,14 +67,11 @@ def generate_launch_description():
         name='ydlidar_ros2_driver_node',
         output='screen',
         parameters=[ydlidar_params],
-        condition=IfCondition(
-            PythonExpression(["'", LaunchConfiguration('lidar_source'),
-                              "' == 'hardware' and '",
-                              LaunchConfiguration('use_lidar'), "' == 'true'"])),
+        condition=IfCondition(use_lidar),
     )
 
     # ---------- Cartographer SLAM 主节点 ----------
-    # 默认订阅 /scan（激光）与 /imu（IMU）；把 /imu remap 到 imu_node 发布的 /imu/data
+    # 订阅 /scan（雷达）与 /imu/data（IMU，remap），数据由真实硬件链提供
     cartographer_node = Node(
         package='cartographer_ros',
         executable='cartographer_node',
@@ -114,26 +98,6 @@ def generate_launch_description():
             '-resolution', '0.05',
             '-publish_period_sec', '1.0',
         ]
-    )
-
-    # ---------- 传感器节点 ----------
-    lidar_node = Node(
-        package='lidar',
-        executable='lidar_node',
-        name='lidar_node',
-        output='screen',
-        condition=IfCondition(
-            PythonExpression(["'", LaunchConfiguration('lidar_source'),
-                              "' == 'sim' and '",
-                              LaunchConfiguration('use_lidar'), "' == 'true'"])),
-    )
-
-    imu_node = Node(
-        package='imu',
-        executable='imu_node',
-        name='imu_node',
-        output='screen',
-        condition=IfCondition(imu_source_sim),
     )
 
     camera_node = Node(
@@ -169,16 +133,12 @@ def generate_launch_description():
         DeclareLaunchArgument('use_lidar', default_value='true'),
         DeclareLaunchArgument('use_camera', default_value='true'),
         DeclareLaunchArgument('use_imu', default_value='true'),
-        DeclareLaunchArgument('imu_source', default_value='sim'),
-        DeclareLaunchArgument('lidar_source', default_value='sim'),
 
         cartographer_node,
         occupancy_grid_node,
         ydlidar_node,
-        lidar_node,
         ybimu_driver_node,
         imu_filter_node,
-        imu_node,
         camera_node,
         robot_state_publisher,
         rviz_node,
