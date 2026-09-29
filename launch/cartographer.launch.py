@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 import os
 
@@ -25,11 +25,25 @@ def generate_launch_description():
     camera_params = os.path.join(repo_root, 'src', 'hardware', 'camera', 'config', 'camera_params.yaml')
 
     # ---------- 可开关的启动参数 ----------
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
+    # use_sim:=true（默认，sim 分支）: Gazebo 仿真链。
+    #   /scan、/imu/data 由 Gazebo 传感器插件直接发布（frame: laser_link / imu_link，
+    #   与本 urdf 和 vi_car_2d.lua 对齐），跳过真实硬件驱动节点。
+    # use_sim:=false: 原有真实硬件链路（ydlidar + ybimu + madgwick）。
+    use_sim = LaunchConfiguration('use_sim', default='true')
+    # 仿真默认用 /clock 仿真时间（见底部 DeclareLaunchArgument），硬件模式维持 false
+    use_sim_time = LaunchConfiguration('use_sim_time')
     use_rviz = LaunchConfiguration('use_rviz', default='true')
     use_lidar = LaunchConfiguration('use_lidar', default='true')
     use_camera = LaunchConfiguration('use_camera', default='true')
     use_imu = LaunchConfiguration('use_imu', default='true')
+
+    # 硬件链路节点统一条件：自身开关打开 且 不在仿真模式（仿真下由 Gazebo 代替）
+    hardware_lidar = IfCondition(PythonExpression(
+        ["'", use_lidar, "' == 'true' and '", use_sim, "' != 'true'"]))
+    hardware_imu = IfCondition(PythonExpression(
+        ["'", use_imu, "' == 'true' and '", use_sim, "' != 'true'"]))
+    hardware_camera = IfCondition(PythonExpression(
+        ["'", use_camera, "' == 'true' and '", use_sim, "' != 'true'"]))
 
     # 硬件 IMU 滤波参数（imu_ros2_device 包内配置）
     from ament_index_python.packages import get_package_share_directory
@@ -41,12 +55,13 @@ def generate_launch_description():
         get_package_share_directory('ydlidar_ros2_driver'), 'params', 'ydlidar_x3.yaml')
 
     # ---------- IMU 链：ybimu_driver(/imu/data_raw,/imu/mag) -> madgwick(/imu/data) ----------
+    # 仅硬件模式（use_sim:=false）启动；仿真下 /imu/data 由 Gazebo imu 插件直接发布
     ybimu_driver_node = Node(
         package='imu_ros2_device',
         executable='ybimu_driver',
         name='ybimu_node',
         output='screen',
-        condition=IfCondition(use_imu),
+        condition=hardware_imu,
     )
 
     imu_filter_node = Node(
@@ -55,10 +70,11 @@ def generate_launch_description():
         name='imu_filter_madgwick',
         output='screen',
         parameters=[imu_filter_params],
-        condition=IfCondition(use_imu),
+        condition=hardware_imu,
     )
 
     # ---------- 雷达链：ydlidar_ros2_driver_node -> /scan ----------
+    # 仅硬件模式（use_sim:=false）启动；仿真下 /scan 由 Gazebo ray 插件直接发布。
     # frame_id=laser_link 与 urdf/vi_car.urdf 的 base_link->laser_link 一致，
     # 驱动自身不发布 TF，由 robot_state_publisher 统一提供（与例程注释掉的 tf2 一致）
     ydlidar_node = Node(
@@ -67,11 +83,12 @@ def generate_launch_description():
         name='ydlidar_ros2_driver_node',
         output='screen',
         parameters=[ydlidar_params],
-        condition=IfCondition(use_lidar),
+        condition=hardware_lidar,
     )
 
     # ---------- Cartographer SLAM 主节点 ----------
-    # 订阅 /scan（雷达）与 /imu/data（IMU，remap），数据由真实硬件链提供
+    # 订阅 /scan 与 /imu/data（remap）：
+    #   仿真模式（use_sim:=true）由 Gazebo 传感器插件提供，硬件模式由真实驱动链提供
     cartographer_node = Node(
         package='cartographer_ros',
         executable='cartographer_node',
@@ -106,7 +123,7 @@ def generate_launch_description():
         name='camera_node',
         output='screen',
         parameters=[camera_params],
-        condition=IfCondition(use_camera),
+        condition=hardware_camera,
     )
 
     # ---------- TF：静态坐标变换（base_link -> 各传感器） ----------
@@ -128,7 +145,13 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument(
+            'use_sim', default_value='true',
+            description='true=Gazebo仿真链(默认，/scan与/imu/data由Gazebo发布)；false=真实硬件链'),
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value=PythonExpression(["'true' if '", use_sim, "' == 'true' else 'false'"]),
+            description='仿真模式默认true(用Gazebo /clock)，硬件模式默认false'),
         DeclareLaunchArgument('use_rviz', default_value='true'),
         DeclareLaunchArgument('use_lidar', default_value='true'),
         DeclareLaunchArgument('use_camera', default_value='true'),
