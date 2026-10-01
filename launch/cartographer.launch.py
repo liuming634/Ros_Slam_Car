@@ -1,108 +1,89 @@
+"""Cartographer 2D 建图主入口（仿真 / 真实硬件通用）。
+
+数据来源二选一，由 use_sim 切换：
+  use_sim=true  （默认）Gazebo 传感器插件直供 /scan 与 /imu/data，跳过硬件驱动
+  use_sim=false 引入 include/hardware_sensors.launch.py 拉起真实雷达/IMU/相机
+
+两条链路的话题与坐标系完全一致（frame=laser_link / imu_link，
+对齐 vi_car_description 的静态 TF 与 config/cartographer/vi_car_2d.lua）。
+
+TF 树：
+  robot_state_publisher : base_link -> laser_link / camera_link / imu_link
+  cartographer          : map -> odom -> base_link（provide_odom_frame=true）
+
+用法：
+  ros2 launch launch/cartographer.launch.py                  # 仿真传感器 + SLAM
+  ros2 launch launch/cartographer.launch.py use_sim:=false   # 真实硬件 + SLAM
+  ros2 launch launch/cartographer.launch.py use_rviz:=false  # 关可视化
+"""
+import os
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
+                            OpaqueFunction)
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
-import os
 
 
 def generate_launch_description():
-    # 项目根目录（本文件位于 <repo>/launch/ 下）
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    include_dir = os.path.join(repo_root, 'launch', 'include')
 
-    # Cartographer 项目级配置（lua，include 的 map_builder.lua 等自动从
+    # Cartographer 项目级配置（lua；include 的 map_builder.lua 等自动从
     # cartographer 安装目录解析，无需手动复制）
-    cartographer_config_dir = os.path.join(repo_root, 'config', 'vi_car', 'cartographer')
+    cartographer_config_dir = os.path.join(repo_root, 'config', 'cartographer')
     configuration_basename = 'vi_car_2d.lua'
 
-    # 小车 URDF（静态 TF：base_link -> laser_link / camera_link / imu_link）
-    urdf_file = os.path.join(repo_root, 'urdf', 'vi_car.urdf')
-    with open(urdf_file, 'r') as f:
-        robot_desc = f.read()
-
-    # 相机参数（直接从源码树读取，避免依赖 camera 包是否已安装；
-    # camera_node 可执行文件仍来自编译后的 camera 包，用 use_camera:=false 可跳过）
-    camera_params = os.path.join(repo_root, 'src', 'hardware', 'camera', 'config', 'camera_params.yaml')
-
     # ---------- 可开关的启动参数 ----------
-    # use_sim:=true（默认，sim 分支）: Gazebo 仿真链。
-    #   /scan、/imu/data 由 Gazebo 传感器插件直接发布（frame: laser_link / imu_link，
-    #   与本 urdf 和 vi_car_2d.lua 对齐），跳过真实硬件驱动节点。
-    # use_sim:=false: 原有真实硬件链路（ydlidar + ybimu + madgwick）。
     use_sim = LaunchConfiguration('use_sim', default='true')
-    # 仿真默认用 /clock 仿真时间（见底部 DeclareLaunchArgument），硬件模式维持 false
+    # 仿真默认用 /clock 仿真时间，硬件模式维持 false
     use_sim_time = LaunchConfiguration('use_sim_time')
     use_rviz = LaunchConfiguration('use_rviz', default='true')
     use_lidar = LaunchConfiguration('use_lidar', default='true')
-    use_camera = LaunchConfiguration('use_camera', default='true')
     use_imu = LaunchConfiguration('use_imu', default='true')
+    use_camera = LaunchConfiguration('use_camera', default='true')
 
-    # 硬件链路节点统一条件：自身开关打开 且 不在仿真模式（仿真下由 Gazebo 代替）
-    hardware_lidar = IfCondition(PythonExpression(
-        ["'", use_lidar, "' == 'true' and '", use_sim, "' != 'true'"]))
-    hardware_imu = IfCondition(PythonExpression(
-        ["'", use_imu, "' == 'true' and '", use_sim, "' != 'true'"]))
-    hardware_camera = IfCondition(PythonExpression(
-        ["'", use_camera, "' == 'true' and '", use_sim, "' != 'true'"]))
+    # 存图：save_map:=true 时把 pbstream 写到 assets/maps/（进程退出时落盘）
+    # 再用 cartographer_pbstream_to_ros_map 转 pgm/yaml 给 AMCL / Nav2
+    save_map = LaunchConfiguration('save_map', default='false')
+    map_save_path = LaunchConfiguration(
+        'map_save_path',
+        default=os.path.join(repo_root, 'assets', 'maps', 'vi_car.pbstream'))
 
-    # 硬件 IMU 滤波参数（imu_ros2_device 包内配置）
-    from ament_index_python.packages import get_package_share_directory
-    imu_filter_params = os.path.join(
-        get_package_share_directory('imu_ros2_device'), 'config', 'imu_filter_param.yaml')
+    # 硬件链只在 use_sim:=false 时引入（仿真下由 Gazebo 代替）
+    hardware_sensors = IfCondition(PythonExpression(["'", use_sim, "' != 'true'"]))
 
-    # 硬件雷达参数（ydlidar_ros2_driver 包内配置，X3 标准 115200 单通道）
-    ydlidar_params = os.path.join(
-        get_package_share_directory('ydlidar_ros2_driver'), 'params', 'ydlidar_x3.yaml')
+    def _cartographer_node(context, *args, **kwargs):
+        """按 save_map 开关决定是否追加 -save_state_filename。
 
-    # ---------- IMU 链：ybimu_driver(/imu/data_raw,/imu/mag) -> madgwick(/imu/data) ----------
-    # 仅硬件模式（use_sim:=false）启动；仿真下 /imu/data 由 Gazebo imu 插件直接发布
-    ybimu_driver_node = Node(
-        package='imu_ros2_device',
-        executable='ybimu_driver',
-        name='ybimu_node',
-        output='screen',
-        condition=hardware_imu,
-    )
-
-    imu_filter_node = Node(
-        package='imu_filter_madgwick',
-        executable='imu_filter_madgwick_node',
-        name='imu_filter_madgwick',
-        output='screen',
-        parameters=[imu_filter_params],
-        condition=hardware_imu,
-    )
-
-    # ---------- 雷达链：ydlidar_ros2_driver_node -> /scan ----------
-    # 仅硬件模式（use_sim:=false）启动；仿真下 /scan 由 Gazebo ray 插件直接发布。
-    # frame_id=laser_link 与 urdf/vi_car.urdf 的 base_link->laser_link 一致，
-    # 驱动自身不发布 TF，由 robot_state_publisher 统一提供（与例程注释掉的 tf2 一致）
-    ydlidar_node = Node(
-        package='ydlidar_ros2_driver',
-        executable='ydlidar_ros2_driver_node',
-        name='ydlidar_ros2_driver_node',
-        output='screen',
-        parameters=[ydlidar_params],
-        condition=hardware_lidar,
-    )
-
-    # ---------- Cartographer SLAM 主节点 ----------
-    # 订阅 /scan 与 /imu/data（remap）：
-    #   仿真模式（use_sim:=true）由 Gazebo 传感器插件提供，硬件模式由真实驱动链提供
-    cartographer_node = Node(
-        package='cartographer_ros',
-        executable='cartographer_node',
-        name='cartographer_node',
-        output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
-        arguments=[
+        节点参数依赖运行时才能求值的 LaunchConfiguration，所以必须用 OpaqueFunction，
+        不能在 generate_launch_description() 里直接判断。
+        """
+        cartographer_args = [
             '-configuration_directory', cartographer_config_dir,
             '-configuration_basename', configuration_basename,
-        ],
-        remappings=[
-            ('imu', 'imu/data'),
         ]
-    )
+        if IfCondition(save_map).evaluate(context):
+            path = os.path.join(
+                repo_root, 'assets', 'maps')
+            os.makedirs(path, exist_ok=True)
+            cartographer_args += ['-save_state_filename', map_save_path.perform(context)]
+
+        return [Node(
+            package='cartographer_ros',
+            executable='cartographer_node',
+            name='cartographer_node',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}],
+            arguments=cartographer_args,
+            remappings=[
+                ('imu', 'imu/data'),
+            ],
+        )]
+
+    cartographer_node = OpaqueFunction(function=_cartographer_node)
 
     # 发布 /map 栅格地图（用命令行参数，与 turtlebot3 官方 launch 一致）
     occupancy_grid_node = Node(
@@ -114,25 +95,26 @@ def generate_launch_description():
         arguments=[
             '-resolution', '0.05',
             '-publish_period_sec', '1.0',
-        ]
+        ],
     )
 
-    camera_node = Node(
-        package='camera',
-        executable='camera_node',
-        name='camera_node',
-        output='screen',
-        parameters=[camera_params],
-        condition=hardware_camera,
+    # ---------- 静态 TF（base_link -> 各传感器） ----------
+    robot_state_publisher = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(include_dir, 'robot_state_publisher.launch.py')),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
-    # ---------- TF：静态坐标变换（base_link -> 各传感器） ----------
-    robot_state_publisher = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
-        parameters=[{'robot_description': robot_desc, 'use_sim_time': use_sim_time}],
+    # ---------- 真实硬件传感器链（仅 use_sim:=false） ----------
+    hardware_chain = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(include_dir, 'hardware_sensors.launch.py')),
+        launch_arguments={
+            'use_lidar': use_lidar,
+            'use_imu': use_imu,
+            'use_camera': use_camera,
+        }.items(),
+        condition=hardware_sensors,
     )
 
     # ---------- 可视化（可选） ----------
@@ -156,13 +138,17 @@ def generate_launch_description():
         DeclareLaunchArgument('use_lidar', default_value='true'),
         DeclareLaunchArgument('use_camera', default_value='true'),
         DeclareLaunchArgument('use_imu', default_value='true'),
+        DeclareLaunchArgument(
+            'save_map', default_value='false',
+            description='true=进程退出时把 pbstream 存到 map_save_path'),
+        DeclareLaunchArgument(
+            'map_save_path',
+            default_value=os.path.join(repo_root, 'assets', 'maps', 'vi_car.pbstream'),
+            description='pbstream 输出路径（仅 save_map:=true 时生效）'),
 
         cartographer_node,
         occupancy_grid_node,
-        ydlidar_node,
-        ybimu_driver_node,
-        imu_filter_node,
-        camera_node,
         robot_state_publisher,
+        hardware_chain,
         rviz_node,
     ])

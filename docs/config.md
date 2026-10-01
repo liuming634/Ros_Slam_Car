@@ -1,9 +1,10 @@
 # vi_car - 小车 SLAM 配置
 
-本目录存放 ROS SLAM 小车的项目级 SLAM 配置：
+顶层 `config/` 存放 ROS SLAM 小车的**项目级** SLAM 配置（包私有参数不在这里，见
+[architecture.md](architecture.md) 的分工说明）：
 
 - `cartographer/` —— **主 SLAM：Cartographer 2D 建图配置**（激光雷达为主，可选 IMU）
-- `vi_car.yaml` / `cam0_pinhole.yaml` —— 备选 SLAM：VINS-Fusion 纯视觉单目配置
+- `vins/` —— 备选 SLAM：VINS-Fusion 纯视觉单目配置（`vi_car.yaml` + `cam0_pinhole.yaml`）
 
 ---
 
@@ -22,17 +23,19 @@ camera_node(/camera/image_raw)   ← 保留接口，Cartographer 不消费
 ### 坐标系
 
 `map`(全局) -> `odom`(cartographer 发布) -> `base_link` -> `laser_link` / `camera_link` / `imu_link`
-（静态 TF 来自 `urdf/vi_car.urdf`，经 `robot_state_publisher` 发布）
+（静态 TF 来自 `src/robot/vi_car_description/urdf/vi_car.urdf`，经 `robot_state_publisher` 发布）
 
 ### 启动方式
 
 ```bash
-cd /home/lm/Ubuntu/code/Ros_Slam_Car
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install
+cd /home/lm/Ubuntu/code/project/Ros_Slam_Car
+scripts/build.sh          # 已内置并发限流，别直接裸跑 colcon build
 source install/setup.bash
 
-# 一键启动 Cartographer（sim 雷达 + sim IMU + 相机）
+# 一键 Gazebo 仿真建图（自带房间场景）
+ros2 launch launch/simulation.launch.py
+
+# 只跑 Cartographer（需 Gazebo 已在别处运行）
 ros2 launch launch/cartographer.launch.py
 ```
 
@@ -58,13 +61,13 @@ ros2 launch launch/cartographer.launch.py
 
 ```
 FPV 图传(USB接收=UVC摄像头)
-        │  src/hardware/camera/camera_node.cpp
+        │  src/drivers/camera/camera_node.cpp
         ▼
 /camera/image_raw  (sensor_msgs/Image, bgr8, 640x480)
         │
         ▼
-vins_node (src/slam/VINS-Fusion-ROS2-humble/vins)
-        │  读取本目录 vi_car.yaml
+vins_node (src/algorithms/vins_fusion/vins)
+        │  读取 config/vins/vi_car.yaml
         ▼
 /odometry /path /camera_pose ... (纯视觉 VIO 输出)
 ```
@@ -73,7 +76,7 @@ vins_node (src/slam/VINS-Fusion-ROS2-humble/vins)
 
 ```bash
 # 相机 + VINS（备选）
-ros2 launch launch/vi_car.launch.py
+ros2 launch launch/vins.launch.py
 
 # 另开终端可视化
 ros2 launch vins vins_rviz.launch.xml
@@ -97,4 +100,4 @@ ros2 launch vins vins_rviz.launch.xml
 | `image_width/height` | 640 / 480 | 必须与相机节点输出一致 |
 | `estimate_extrinsic` / `body_T_cam0` | 0 / 占位矩阵 | 纯视觉模式不使用，但上游代码会无条件解析，缺失会启动崩溃，保留占位 |
 | `world/body/camera_frame_id` | world / body / camera_link | TF 坐标系；camera_link 与相机节点图像 header 一致 |
-| `output_path` | `<repo>/data/vins_output/` | 绝对路径，项目目录移动时需同步修改 |
+| `output_path` | `<repo>/assets/runtime/vins_output/` | 绝对路径，项目目录移动时需同步修改 |

@@ -16,9 +16,11 @@ tmp/
 *.swp
 *~
 
-# ==== 运行时数据（VINS 轨迹输出等） ====
-/data/vins_output/
-/sensor/
+# ==== 运行时产物（VINS 轨迹等，只保留目录占位） ====
+/assets/runtime/*
+!/assets/runtime/.gitkeep
+/assets/maps/*
+!/assets/maps/.gitkeep
 
 # ==== 其它 ====
 *.csv.bak

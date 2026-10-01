@@ -7,7 +7,7 @@
 --
 -- 坐标系：
 --   map(全局, cartographer) -> odom(cartographer 发布) -> base_link
---     -> laser_link / camera_link / imu_link (urdf/vi_car.urdf 静态 TF)
+--     -> laser_link / camera_link / imu_link (src/robot/vi_car_description/urdf/vi_car.urdf 静态 TF)
 --
 -- 启动方式：ros2 launch launch/cartographer.launch.py
 -- ============================================================

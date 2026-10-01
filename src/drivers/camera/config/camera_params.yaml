@@ -1,13 +1,13 @@
 # camera_node 参数配置
-# 与 src/hardware/camera/src/camera_node.cpp 中 declare_parameter 保持一一对应
-# 节点名前缀与 launch/camera_launch.py 及 launch/vi_car.launch.py 中的 name='camera_node' 一致
+# 与 src/drivers/camera/src/camera_node.cpp 中 declare_parameter 保持一一对应
+# 节点名前缀与 launch/camera_launch.py 及 launch/vins.launch.py 中的 name='camera_node' 一致
 camera_node:
   ros__parameters:
     # 相机来源：usb = 普通 UVC 摄像头（FPV 图传接收端即为此）；fpv = 未实现（占位）
     camera_source: usb
     # USB 相机参数
     camera_id: 0
-    # 分辨率与 config/vi_car/cam0_pinhole.yaml 标定一致
+    # 分辨率与 config/cam0_pinhole.yaml 标定一致
     camera_width: 640
     camera_height: 480
     camera_fps: 30

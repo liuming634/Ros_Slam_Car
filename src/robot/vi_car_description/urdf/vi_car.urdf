@@ -9,7 +9,7 @@
        雷达由中央立柱抬高至扫描面 z=0.105（世界系），360° 扫描范围内无遮挡
        IMU 在雷达正下方的底盘台面上（低于扫描面，不遮挡雷达）
 
-     坐标系（与 config/vi_car/cartographer/vi_car_2d.lua 对应）：
+     坐标系（与 config/cartographer/vi_car_2d.lua 对应）：
        base_footprint -> base_link -> laser_link / imu_link（robot_state_publisher 发静态 TF）
        tracking_frame=imu_link, published_frame=base_link, laser frame=laser_link
 
