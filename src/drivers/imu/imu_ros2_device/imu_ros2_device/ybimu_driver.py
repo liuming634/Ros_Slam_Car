@@ -38,10 +38,10 @@ class ybimu_driver(Node):
         self.robot.create_receive_threading()
 
         # create publisher
-        self.imuPublisher = self.create_publisher(Imu, "imu/data_raw", 100)
-        self.magPublisher = self.create_publisher(MagneticField, "imu/mag", 100)
-        self.baroPublisher = self.create_publisher(Float32MultiArray, "baro", 100)
-        self.eulerPublisher = self.create_publisher(Float32MultiArray, "euler", 100)
+        self.imuPublisher = self.create_publisher(Imu, "/imu/data_raw", 100)
+        self.magPublisher = self.create_publisher(MagneticField, "/imu/mag", 100)
+        self.baroPublisher = self.create_publisher(Float32MultiArray, "/baro", 100)
+        self.eulerPublisher = self.create_publisher(Float32MultiArray, "/euler", 100)
 
         # create timer
         self.timer = self.create_timer(0.1, self.pub_data)

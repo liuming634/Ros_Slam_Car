@@ -79,7 +79,7 @@ def generate_launch_description():
             parameters=[{'use_sim_time': use_sim_time}],
             arguments=cartographer_args,
             remappings=[
-                ('imu', 'imu/data'),
+                ('/imu', '/imu/data'),
             ],
         )]
 

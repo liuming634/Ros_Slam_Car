@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
   auto node = rclcpp::Node::make_shared("ydlidar_ros2_driver_client");
 
   auto lidar_info_sub = node->create_subscription<sensor_msgs::msg::LaserScan>(
-                        "scan", rclcpp::SensorDataQoS(), scanCb);
+                        "/scan", rclcpp::SensorDataQoS(), scanCb);
 
   rclcpp::spin(node);
 

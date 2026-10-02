@@ -83,7 +83,7 @@ public:
         }
 
         // Create publisher
-        image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("camera/image_raw", 10);
+        image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/camera/image_raw", 10);
 
         // Start timer
         timer_ = this->create_wall_timer(
