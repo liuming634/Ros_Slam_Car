@@ -1,6 +1,6 @@
 # camera_node 参数配置
 # 与 src/drivers/camera/src/camera_node.cpp 中 declare_parameter 保持一一对应
-# 节点名前缀与 launch/camera_launch.py 及 launch/vins.launch.py 中的 name='camera_node' 一致
+# 节点名前缀与 launch/camera_launch.py 及 launch/include/hardware_sensors.launch.py 中的 name='camera_node' 一致
 camera_node:
   ros__parameters:
     # 相机来源：usb = 普通 UVC 摄像头（FPV 图传接收端即为此）；fpv = 未实现（占位）

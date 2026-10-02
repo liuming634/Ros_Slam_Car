@@ -4,8 +4,7 @@
 
 ## 功能特性
 
-- **主 SLAM：Cartographer（激光雷达 2D 建图）**，融合 IMU，输出 `/map` 栅格地图与 TF（`map -> odom -> base_link`）
-- **备选 SLAM：VINS-Fusion（纯视觉单目 VIO）**，验证相机数据链路
+- **SLAM：Cartographer（激光雷达 2D 建图）**，融合 IMU，输出 `/map` 栅格地图与 TF（`map -> odom -> base_link`）
 - **仿真优先**：Gazebo 传感器插件直供 `/scan` + `/imu/data`，无需硬件即可跑通建图全链路
 - **硬件可切**：`use_sim:=false` 一键切换到 YDLidar 雷达 + YbImu + 相机真实驱动
 
@@ -21,21 +20,18 @@ Ros_Slam_Car/
 │   │   ├── imu/              #    imu_ros2_device
 │   │   └── camera/           #    USB 摄像头 / FPV 图传
 │   ├── algorithms/           # ② 算法层：话题 → map / odom / tf
-│   │   ├── cartographer_ros/ #    Cartographer（主，含 3 个上游包）
-│   │   └── vins_fusion/      #    VINS-Fusion（备选，含 4 个上游包）
+│   │   └── cartographer_ros/ #    Cartographer（3 个上游包）
 │   └── robot/                # ③ 本体描述层：坐标系唯一真源
 │       └── vi_car_description/   # urdf/ worlds/ models/ rviz/
 ├── config/                   # 项目级配置，按"域"分组
-│   ├── cartographer/         #    vi_car_2d.lua
-│   └── vins/                 #    vi_car.yaml + cam0_pinhole.yaml
+│   └── cartographer/         #    vi_car_2d.lua
 ├── launch/                   # 启动入口，按"场景"分组
 │   ├── simulation.launch.py  #    Gazebo 仿真全链路
 │   ├── cartographer.launch.py#    Cartographer 建图（仿真/硬件通用）
-│   ├── vins.launch.py        #    VINS-Fusion 备选方案
 │   └── include/              #    可复用片段（静态TF、硬件传感器链）
 ├── assets/                   # 运行产物（已 gitignore，只留目录占位）
-│   ├── maps/                 #    地图文件
-│   └── runtime/              #    VINS 轨迹等运行时输出
+│   ├── maps/                 #    地图文件（pgm / yaml / pbstream）
+│   └── runtime/              #    其他运行时输出
 ├── docs/                     # 文档
 │   ├── architecture.md       #    分层架构与数据流
 │   ├── slam.md               #    SLAM 方案与用法
@@ -62,9 +58,6 @@ ros2 launch launch/simulation.launch.py
 
 # 只跑 Cartographer（需 Gazebo 已在别处运行；传感器来源由 use_sim 切换）
 ros2 launch launch/cartographer.launch.py
-
-# 备选：相机 + VINS-Fusion（视觉 SLAM）
-ros2 launch launch/vins.launch.py
 ```
 
 车静止时 Cartographer 建不出地图，另开终端遥控：
@@ -103,7 +96,7 @@ ros2 launch launch/simulation.launch.py gui:=false   # 无头仿真
 scripts/build.sh              # 限流构建（默认总并发 2）
 scripts/build.sh --clean      # 清干净再全量构建
 scripts/build.sh -j4          # 机器空闲时可放宽到 4
-scripts/build.sh camera vins  # 只构建指定包
+scripts/build.sh camera       # 只构建指定包
 scripts/clean.sh              # 清 build/install/log + 运行时产物
 scripts/clean.sh --all        # 额外清空 assets/maps（地图会丢）
 ```
@@ -121,4 +114,6 @@ scripts/clean.sh --all        # 额外清空 assets/maps（地图会丢）
 
 - Ubuntu 22.04 + ROS 2 Humble
 - Cartographer（`ros2/cartographer_ros`，vendored 在 `src/algorithms/cartographer_ros/`）
-- VINS-Fusion（`zinuok/VINS-Fusion-ROS2`，vendored 在 `src/algorithms/vins_fusion/`）
+
+> 本项目 SLAM 只用 Cartographer。原 vendored 的 VINS-Fusion 视觉方案（112MB 上游源码
+> 与模型权重）已移除，`config/vins/` 与 `launch/vins.launch.py` 一并删除。

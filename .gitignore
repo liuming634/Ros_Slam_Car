@@ -1,7 +1,8 @@
-# ==== colcon / ROS2 构建产物 ====
+# ==== colcon / ROS 2 构建产物 ====
 /build/
 /install/
 /log/
+/tmp/
 
 # ==== Python ====
 __pycache__/
@@ -12,15 +13,19 @@ __pycache__/
 .claude/
 .marscode/
 .opencode/
-tmp/
 *.swp
 *~
 
-# ==== 运行时产物（VINS 轨迹等，只保留目录占位） ====
+# ==== 运行时产物（只保留目录占位） ====
 /assets/runtime/*
 !/assets/runtime/.gitkeep
 /assets/maps/*
 !/assets/maps/.gitkeep
+
+# ==== 已移除的备选方案 ====
+# VINS-Fusion 已从项目移除（本项目 SLAM 只用 Cartographer）。
+# 保留忽略规则以防日后误提交这112MB 的上游源码与模型权重。
+src/algorithms/vins_fusion/
 
 # ==== 其它 ====
 *.csv.bak

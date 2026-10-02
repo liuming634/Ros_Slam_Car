@@ -67,5 +67,5 @@ RViz 预设配置（快速加载机器人模型 / 传感器 / 地图）、实时
 ③ 实车建图 + 保存地图
 ④ AMCL 地图内定位
 ⑤ Nav2 路径规划 + 底盘控制（需 interfaces + control + navigation）
-⑥ 多源融合（IMU / 轮式里程计 / VINS 经 robot_localization）
+⑥ 多源融合（IMU / 轮式里程计经 robot_localization）
 ```

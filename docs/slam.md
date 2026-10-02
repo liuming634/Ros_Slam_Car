@@ -17,9 +17,8 @@ ybimu_driver -> madgwick(/imu/data, imu_link)├─> cartographer_node -> /map +
 camera_node(/camera/image_raw)   ← 保留接口，Cartographer 不消费
 ```
 
-- 启动方式：顶层 `launch/cartographer.launch.py`（一键启动 SLAM + 雷达 + IMU + 相机 + TF）。
-- **备选 SLAM：VINS-Fusion**（视觉惯性），源码在 `VINS-Fusion-ROS2-humble/`，
-  用顶层 `launch/vins.launch.py` 单独启动（相机 + VINS）。
+- 启动方式：顶层 `launch/simulation.launch.py`（一键 Gazebo 仿真建图）
+  或 `launch/cartographer.launch.py`（需 Gazebo 已在别处运行）。
 - **真实硬件驱动**：已接入 YDLidar X3（`src/drivers/lidar/ydlidar_ros2_driver`）
   与 YbImu（`src/drivers/imu/imu_ros2_device`），udev 固定 `/dev/ydlidar` / `/dev/myimu`。
 
@@ -49,7 +48,7 @@ map(全局) -> odom(cartographer 发布) -> base_link -> laser_link
 |---|---|---|
 | 雷达 | `/scan`（`sensor_msgs/LaserScan`） | `lidar_node` 发布，Cartographer 主输入 |
 | IMU | `/imu/data`（`sensor_msgs/Imu`） | `imu_node` 发布，launch 里 remap 给 Cartographer 的 `/imu` |
-| 相机 | `/camera/image_raw`（`sensor_msgs/Image`） | `camera_node` 发布，保留供 VINS / 后续视觉用 |
+| 相机 | `/camera/image_raw`（`sensor_msgs/Image`） | `camera_node` 发布，Cartographer 不消费，保留供后续视觉用 |
 
 ## 4. 使用说明
 
@@ -63,9 +62,6 @@ ros2 launch launch/simulation.launch.py
 
 # 只跑 Cartographer（Gazebo 需已在别处运行，传感器来源由 use_sim 切换）
 ros2 launch launch/cartographer.launch.py
-
-# 备选：相机 + VINS
-ros2 launch launch/vins.launch.py
 
 # 常用开关
 ros2 launch launch/cartographer.launch.py use_camera:=false   # 无相机硬件时
@@ -142,22 +138,7 @@ sed -i 's/^image: map.pgm/image: vi_car.pgm/' assets/maps/map.yaml
 
 ---
 
-## 5. VINS-Fusion（备选 SLAM）
-
-**VINS-Fusion 是视觉惯性里程计（VIO）**：实时估算设备相对起点的 6 自由度位姿，稀疏建图。
-它**不能**建可导航栅格地图，对地面小车导航只能当里程计配角。
-当前保留的纯视觉单目配置（`config/vins/vi_car.yaml`）用于验证相机数据链路；
-单目 + 无 IMU 存在尺度不确定，接入 IMU 或双目/深度后可作视觉里程计输入。
-
-| 它能做 | 它不能做 |
-|---|---|
-| 实时位姿/里程计估计（GPS 失效环境） | 建可导航地图（栅格/稠密） |
-| 稀疏特征点图 + 回环修正漂移 | 在地图里定位（AMCL 那种） |
-| 作为多传感器融合中的一路里程计 | 路径规划、避障、控制 |
-
----
-
-## 6. 自动导航方案（后续路线）
+## 5. 自动导航方案（后续路线）
 
 ```
 传感器：2D 雷达 + 轮式编码器 + IMU
@@ -165,7 +146,7 @@ sed -i 's/^image: map.pgm/image: vi_car.pgm/' assets/maps/map.yaml
   ├─ 定位：AMCL（在已保存地图里定位）
   ├─ 规划：Nav2 / move_base（全局 + 局部路径规划）
   ├─ 控制：底盘驱动节点（差速/阿克曼）
-  └─（可选）VINS-Fusion 作为视觉里程计输入 robot_localization 融合
+  └─（可选）视觉里程计作为一路输入 robot_localization 融合
 ```
 
 | 阶段 | 内容 | 依赖 |
@@ -175,25 +156,19 @@ sed -i 's/^image: map.pgm/image: vi_car.pgm/' assets/maps/map.yaml
 | ③ 建图 | Cartographer 实车建图 + 保存地图 | ② |
 | ④ 定位 | AMCL 地图内定位 | ③ 保存的地图 |
 | ⑤ 导航 | Nav2 路径规划 + 底盘控制 | ③④ + 底盘驱动 |
-| ⑥ 融合（可选） | VINS/IMU/轮式里程计多源融合（robot_localization） | 全部跑通后 |
+| ⑥ 融合（可选） | IMU / 轮式里程计多源融合（robot_localization） | 全部跑通后 |
 
 ---
 
-## 7. 目录结构
+## 6. 目录结构
 
 ```
 src/algorithms/
-├── cartographer_ros/          # vendored 源码（无嵌套 .git），上游 ros2/cartographer_ros，含
-│   ├── cartographer_ros/       #   主包：cartographer_node 等
-│   ├── cartographer_ros_msgs/  #   消息包
-│   └── cartographer_rviz/      #   RViz 插件
-└── vins_fusion/                # vendored 源码，上游 zinuok/VINS-Fusion-ROS2（备选）
-    ├── vins/                    #   主包：vins_node
-    ├── camera_models/           #   标定模型
-    ├── global_fusion/           #   GPS 融合
-    └── loop_fusion/             #   回环检测
+└── cartographer_ros/          # vendored 源码（无嵌套 .git），上游 ros2/cartographer_ros，含
+    ├── cartographer_ros/       #   主包：cartographer_node 等
+    ├── cartographer_ros_msgs/  #   消息包
+    └── cartographer_rviz/      #   RViz 插件
 ```
 
 小车自身的 SLAM 配置在顶层 `config/`：
 - `cartographer/vi_car_2d.lua` —— Cartographer 2D 建图配置（激光 + 可选 IMU）
-- `vins/vi_car.yaml` / `vins/cam0_pinhole.yaml` —— VINS 纯视觉单目配置

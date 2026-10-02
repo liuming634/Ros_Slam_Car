@@ -4,7 +4,7 @@
 #   scripts/build.sh                  # 安全限流构建（总并发 2，推荐默认）
 #   scripts/build.sh --clean          # 先清空 build/install/log 再全量构建
 #   scripts/build.sh -j4              # 放宽到总并发 4（机器空闲时）
-#   scripts/build.sh camera vins      # 只构建指定包
+#   scripts/build.sh camera            # 只构建指定包
 #   scripts/build.sh -- -j8           # 显式指定并发上限（不建议本机用）
 #
 # 为什么默认限流：本机 32 核但只有 14G 内存。colcon 默认按 CPU 核数起并行任务，
