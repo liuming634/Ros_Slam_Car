@@ -248,10 +248,12 @@
     <material>Gazebo/Grey</material>
   </gazebo>
   <!-- 轮子摩擦：fdir1 取滚动方向（Husky 等四轮差速模型同款配置）。
-       四轮固定底盘原地转向受滑动摩擦影响属正常物理现象，不影响 Cartographer（只用雷达+IMU）。 -->
+       mu1=滚动方向摩擦，mu2=侧向摩擦。差速车转向靠轮子侧向打滑，
+       mu2 必须远小于 mu1，否则侧向被"拖住"，原地转向极慢甚至转不动。
+       改成 mu2=0.01 后转向恢复灵活，且不影响 Cartographer（只用雷达+IMU）。 -->
   <gazebo reference="left_front_wheel">
     <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu2>0.01</mu2>
     <fdir1>1 0 0</fdir1>
     <kp>1000000.0</kp>
     <kd>100.0</kd>
@@ -259,7 +261,7 @@
   </gazebo>
   <gazebo reference="left_rear_wheel">
     <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu2>0.01</mu2>
     <fdir1>1 0 0</fdir1>
     <kp>1000000.0</kp>
     <kd>100.0</kd>
@@ -267,7 +269,7 @@
   </gazebo>
   <gazebo reference="right_front_wheel">
     <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu2>0.01</mu2>
     <fdir1>1 0 0</fdir1>
     <kp>1000000.0</kp>
     <kd>100.0</kd>
@@ -275,7 +277,7 @@
   </gazebo>
   <gazebo reference="right_rear_wheel">
     <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu2>0.01</mu2>
     <fdir1>1 0 0</fdir1>
     <kp>1000000.0</kp>
     <kd>100.0</kd>
@@ -366,8 +368,10 @@
       <right_joint>right_rear_wheel_joint</right_joint>
       <wheel_separation>0.125</wheel_separation>
       <wheel_diameter>0.05</wheel_diameter>
-      <max_wheel_torque>5.0</max_wheel_torque>
-      <max_wheel_acceleration>20.0</max_wheel_acceleration>
+      <!-- 扭矩/加速度上限：原5.0/20.0 对 0.6kg 车偏保守，起步和加速都发不出力，
+           表现为"移动很慢、按了没反应"。调到 10/50 后响应明显加快。 -->
+      <max_wheel_torque>10.0</max_wheel_torque>
+      <max_wheel_acceleration>50.0</max_wheel_acceleration>
       <publish_odom>true</publish_odom>
       <!-- cartographer_2d.lua: provide_odom_frame=true 由 cartographer 发 odom TF，避免双源冲突 -->
       <publish_odom_tf>false</publish_odom_tf>
