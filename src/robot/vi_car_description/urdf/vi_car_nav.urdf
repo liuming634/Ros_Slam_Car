@@ -1,0 +1,399 @@
+<?xml version="1.0"?>
+<!-- ============================================================
+     SLAM 小车 vi_car —— 差速四轮 + 2D雷达 + IMU（Gazebo classic 11 / ROS2 Humble）
+
+     尺寸（单位 m）：
+       底盘 0.25 x 0.10 x 0.02，底盘平面位于轮轴高度（base_link 原点，地面上方 0.025）
+       轮径 0.05（半径 0.025），轮宽 0.025，装在底盘两侧外（轮距 0.125）
+       轴距 0.15（前后轮各距车中心 0.075）
+       雷达由中央立柱抬高至扫描面 z=0.105（世界系），360° 扫描范围内无遮挡
+       IMU 在雷达正下方的底盘台面上（低于扫描面，不遮挡雷达）
+
+     坐标系（与 config/cartographer/vi_car_2d.lua 对应）：
+       base_footprint -> base_link -> laser_link / imu_link（robot_state_publisher 发静态 TF）
+       tracking_frame=imu_link, published_frame=base_link, laser frame=laser_link
+
+Gazebo 插件（gazebo_ros_pkgs）：
+       /scan        10Hz 720点 360°，量程 0.10~7m（libgazebo_ros_ray_sensor）
+       /imu/data    100Hz，ENU 对齐（cartographer.launch.py 中 imu -> imu/data）
+       /cmd_vel     差速控制输入；/odom 话题输出
+       ★ 与 vi_car.urdf（建图用）的唯一区别见下方差速插件 publish_odom_tf
+
+     ★★ 本文件是「导航模式」专用副本，唯一目的是把 odom 帧交给轮式里程计 ★★
+       建图模式（vi_car.urdf）：
+         Cartographer provide_odom_frame=true → 由 Cartographer 发布 odom→base_link
+         差速插件 publish_odom_tf=false     → 避免两个节点抢同一条TF
+       导航模式（本文件）：
+         导航时不启动 Cartographer，odom 帧无人发布
+         差速插件 publish_odom_tf=true      → 发布 odom→base_footprint
+         AMCL 在此之上发布 map→odom，形成完整定位链
+
+       两者互斥运行，靠「启动哪个 launch」决定，不会同时抢 TF。
+       若将来改用 xacro 参数化，可合并回单文件，但需先引入 xacro 概念。
+     ============================================================ -->
+<robot name="vi_car">
+
+  <!-- ==================== 地面投影原点 ==================== -->
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0.025" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== 底盘 0.25 x 0.10 x 0.02 ==================== -->
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.6"/>
+      <inertia ixx="0.00052" iyy="0.003145" izz="0.003625" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.25 0.10 0.02"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.25 0.10 0.02"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- ==================== 四轮 r=0.025 w=0.025（不转向，差速） ==================== -->
+  <!-- 左前轮 -->
+  <link name="left_front_wheel">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="1.0417e-05" iyy="1.5625e-05" izz="1.0417e-05" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="left_front_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_front_wheel"/>
+    <origin xyz="0.075 0.0625 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.001" friction="0.0"/>
+  </joint>
+
+  <!-- 左后轮 -->
+  <link name="left_rear_wheel">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="1.0417e-05" iyy="1.5625e-05" izz="1.0417e-05" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="left_rear_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_rear_wheel"/>
+    <origin xyz="-0.075 0.0625 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.001" friction="0.0"/>
+  </joint>
+
+  <!-- 右前轮 -->篇
+  <link name="right_front_wheel">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="1.0417e-05" iyy="1.5625e-05" izz="1.0417e-05" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_front_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_front_wheel"/>
+    <origin xyz="0.075 -0.0625 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.001" friction="0.0"/>
+  </joint>
+
+  <!-- 右后轮 -->
+  <link name="right_rear_wheel">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="1.0417e-05" iyy="1.5625e-05" izz="1.0417e-05" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.025"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_rear_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_rear_wheel"/>
+    <origin xyz="-0.075 -0.0625 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.001" friction="0.0"/>
+  </joint>
+
+  <!-- ==================== IMU：雷达正下方底盘台面上 ==================== -->
+  <link name="imu_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="2.0833e-07" iyy="2.0833e-07" izz="3.75e-07" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.015 0.005"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.015 0.005"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <!-- 立柱在底盘中心，IMU 稍靠后贴在台面上，仍在雷达正下方，低于扫描面无遮挡 -->
+    <origin xyz="-0.03 0 0.0125" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== 雷达立柱：抬高达无遮挡扫描 ==================== -->
+  <link name="lidar_mount">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="7.33e-06" iyy="7.33e-06" izz="2.16e-06" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.012" length="0.05"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.012" length="0.05"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="lidar_mount_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_mount"/>
+    <origin xyz="0 0 0.035" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== 2D雷达（YDLidar X3 近似外形） ==================== -->
+  <link name="laser_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="2.1979e-05" iyy="2.1979e-05" izz="3.0625e-05" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.035" length="0.04"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.035" length="0.04"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="laser_joint" type="fixed">
+    <parent link="lidar_mount"/>
+    <child link="laser_link"/>
+    <origin xyz="0 0 0.045" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== Gazebo 外观 / 摩擦 ==================== -->
+  <gazebo reference="base_link">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <!-- 轮子摩擦：fdir1 取滚动方向（Husky 等四轮差速模型同款配置）。
+       四轮固定底盘原地转向受滑动摩擦影响属正常物理现象，不影响 Cartographer（只用雷达+IMU）。 -->
+  <gazebo reference="left_front_wheel">
+    <mu1>1.0</mu1>
+    <mu2>0.01</mu2>
+    <fdir1>1 0 0</fdir1>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="left_rear_wheel">
+    <mu1>1.0</mu1>
+    <mu2>0.01</mu2>
+    <fdir1>1 0 0</fdir1>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="right_front_wheel">
+    <mu1>1.0</mu1>
+    <mu2>0.01</mu2>
+    <fdir1>1 0 0</fdir1>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="right_rear_wheel">
+    <mu1>1.0</mu1>
+    <mu2>0.01</mu2>
+    <fdir1>1 0 0</fdir1>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="lidar_mount">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="laser_link">
+    <material>Gazebo/Black</material>
+    <sensor name="vi_car_lidar" type="ray">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <visualize>true</visualize>
+      <pose>0 0 0 0 0 0</pose>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159265</min_angle>
+            <max_angle>3.14159265</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.10</min>
+          <max>7.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <plugin name="vi_car_lidar_plugin" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <namespace>/</namespace>
+          <remapping>~/out:=scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>laser_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="imu_link">
+    <material>Gazebo/Blue</material>
+    <sensor name="vi_car_imu" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <pose>0 0 0 0 0 0</pose>
+      <imu>
+        <angular_velocity>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev><bias_mean>0.0</bias_mean><bias_stddev>0.00005</bias_stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev><bias_mean>0.0</bias_mean><bias_stddev>0.00005</bias_stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev><bias_mean>0.0</bias_mean><bias_stddev>0.00005</bias_stddev></noise></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev><bias_mean>0.0</bias_mean><bias_stddev>0.001</bias_stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev><bias_mean>0.0</bias_mean><bias_stddev>0.001</bias_stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev><bias_mean>0.0</bias_mean><bias_stddev>0.001</bias_stddev></noise></z>
+        </linear_acceleration>
+      </imu>
+      <plugin name="vi_car_imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+        <ros>
+          <namespace>/</namespace>
+          <remapping>~/out:=imu/data</remapping>
+        </ros>
+        <!-- false: 输出 ENU 世界系姿态（重力 -Z 对齐），Cartographer 2D 需要此约定 -->
+        <initial_orientation_as_reference>false</initial_orientation_as_reference>
+        <frame_name>imu_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!-- ==================== 差速驱动（左右各两轮同速） ==================== -->
+  <gazebo>
+    <plugin name="vi_car_diff_drive" filename="libgazebo_ros_diff_drive.so">
+      <ros>
+        <namespace>/</namespace>
+      </ros>
+      <update_rate>30</update_rate>
+      <!-- 四轮差速：左右各 2 轮，必须显式声明轮对数，默认 1 会报 joints 不一致 -->
+      <num_wheel_pairs>2</num_wheel_pairs>
+      <left_joint>left_front_wheel_joint</left_joint>
+      <left_joint>left_rear_wheel_joint</left_joint>
+      <right_joint>right_front_wheel_joint</right_joint>
+      <right_joint>right_rear_wheel_joint</right_joint>
+      <wheel_separation>0.125</wheel_separation>
+      <wheel_diameter>0.05</wheel_diameter>
+      <max_wheel_torque>10.0</max_wheel_torque>
+      <max_wheel_acceleration>50.0</max_wheel_acceleration>
+      <publish_odom>true</publish_odom>
+      <!-- ★ 本文件与建图版 vi_car.urdf 的唯一差异 ★
+           导航模式不启动 Cartographer，odom 帧改由轮式里程计提供：
+             odom → base_footprint 由本插件发布（轮子转了多少，物理事实，不漂）
+             map → odom          由 AMCL 发布（对已有地图做雷达匹配修正）
+           建图版此处为 false，因为 Cartographer 会自己发 odom 帧，双源会打架。 -->
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>false</publish_wheel_tf>
+      <odometry_frame>odom</odometry_frame>
+      <!-- ★ 此值必须与 nav2 yaml 里 amcl.base_frame_id /
+           global_costmap.robot_base_frame / local_costmap.robot_base_frame
+           三处的 base_footprint 保持一致，否则 Nav2 查不到 TF 而报错 -->
+      <robot_base_frame>base_footprint</robot_base_frame>
+    </plugin>
+  </gazebo>
+
+</robot>
