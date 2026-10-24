@@ -29,12 +29,12 @@ camera_node(/camera/image_raw)   ← 保留接口，Cartographer 不消费
 **Cartographer 是激光 SLAM**：融合激光（+ IMU/里程计）实时建 2D 栅格地图并输出位姿，
 是地面小车导航的标准方案。
 
-| 它能做 | 配套需要 |
-|---|---|
-| 实时位姿估计（`odom` 帧） | TF：`map -> odom -> base_link -> {laser, camera, imu}` |
-| 建可导航 2D 栅格地图 `/map` | `cartographer_occupancy_grid_node` |
-| 回环检测修正漂移 | 保存地图（pbstream）后可转栅格地图用于 AMCL 定位 |
-| 融合 IMU / 轮式里程计 | 接入后置 `use_imu_data` / `use_odometry` |
+| 它能做                       | 配套需要                                                 |
+| ---------------------------- | -------------------------------------------------------- |
+| 实时位姿估计（`odom` 帧）  | TF：`map -> odom -> base_link -> {laser, camera, imu}` |
+| 建可导航 2D 栅格地图`/map` | `cartographer_occupancy_grid_node`                     |
+| 回环检测修正漂移             | 保存地图（pbstream）后可转栅格地图用于 AMCL 定位         |
+| 融合 IMU / 轮式里程计        | 接入后置`use_imu_data` / `use_odometry`              |
 
 ## 3. 坐标系与数据接口
 
@@ -44,11 +44,11 @@ map(全局) -> odom(cartographer 发布) -> base_link -> laser_link
                                               └─ imu_link
 ```
 
-| 接口 | 话题 | 说明 |
-|---|---|---|
-| 雷达 | `/scan`（`sensor_msgs/LaserScan`） | `lidar_node` 发布，Cartographer 主输入 |
-| IMU | `/imu/data`（`sensor_msgs/Imu`） | `imu_node` 发布，launch 里 remap 给 Cartographer 的 `/imu` |
-| 相机 | `/camera/image_raw`（`sensor_msgs/Image`） | `camera_node` 发布，Cartographer 不消费，保留供后续视觉用 |
+| 接口 | 话题                                           | 说明                                                           |
+| ---- | ---------------------------------------------- | -------------------------------------------------------------- |
+| 雷达 | `/scan`（`sensor_msgs/LaserScan`）         | `lidar_node` 发布，Cartographer 主输入                       |
+| IMU  | `/imu/data`（`sensor_msgs/Imu`）           | `imu_node` 发布，launch 里 remap 给 Cartographer 的 `/imu` |
+| 相机 | `/camera/image_raw`（`sensor_msgs/Image`） | `camera_node` 发布，Cartographer 不消费，保留供后续视觉用    |
 
 ## 4. 使用说明
 
@@ -149,14 +149,14 @@ sed -i 's/^image: map.pgm/image: vi_car.pgm/' assets/maps/map.yaml
   └─（可选）视觉里程计作为一路输入 robot_localization 融合
 ```
 
-| 阶段 | 内容 | 依赖 |
-|---|---|---|
-| ① 当前 | Cartographer 建图链路（sim 联调） | 雷达 / IMU 硬件 |
-| ② 接入真传感器 | lidar/imu 串口驱动 | 购买/手头设备 |
-| ③ 建图 | Cartographer 实车建图 + 保存地图 | ② |
-| ④ 定位 | AMCL 地图内定位 | ③ 保存的地图 |
-| ⑤ 导航 | Nav2 路径规划 + 底盘控制 | ③④ + 底盘驱动 |
-| ⑥ 融合（可选） | IMU / 轮式里程计多源融合（robot_localization） | 全部跑通后 |
+| 阶段            | 内容                                           | 依赖            |
+| --------------- | ---------------------------------------------- | --------------- |
+| ① 当前         | Cartographer 建图链路（sim 联调）              | 雷达 / IMU 硬件 |
+| ② 接入真传感器 | lidar/imu 串口驱动                             | 购买/手头设备   |
+| ③ 建图         | Cartographer 实车建图 + 保存地图               | ②              |
+| ④ 定位         | AMCL 地图内定位                                | ③ 保存的地图   |
+| ⑤ 导航         | Nav2 路径规划 + 底盘控制                       | ③④ + 底盘驱动 |
+| ⑥ 融合（可选） | IMU / 轮式里程计多源融合（robot_localization） | 全部跑通后      |
 
 ---
 
@@ -171,4 +171,5 @@ src/algorithms/
 ```
 
 小车自身的 SLAM 配置在顶层 `config/`：
+
 - `cartographer/vi_car_2d.lua` —— Cartographer 2D 建图配置（激光 + 可选 IMU）
