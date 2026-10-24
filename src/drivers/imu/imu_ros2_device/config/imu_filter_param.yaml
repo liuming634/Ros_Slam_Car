@@ -5,3 +5,6 @@ imu_filter_madgwick:
         publish_tf: false
         world_frame: "enu"
         orientation_stddev: 0.01
+        # 必须保留重力：Cartographer 靠静止时 ~9.81 m/s² 的线性加速度估计重力方向
+        # （默认 true 会把重力扣掉，导致 SLAM 重力对齐失效）
+        remove_gravitational_acceleration: false

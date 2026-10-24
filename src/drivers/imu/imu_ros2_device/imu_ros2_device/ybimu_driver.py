@@ -37,14 +37,18 @@ class ybimu_driver(Node):
             return
         self.robot.create_receive_threading()
 
+        # 模块出厂默认 25Hz 回传，Cartographer 需要 100Hz 级别的 IMU 流；
+        # 模块支持 10~100Hz，每次启动都下发一次（无论是否掉电保存都成立）
+        self.robot.set_report_rate(100)
+
         # create publisher
         self.imuPublisher = self.create_publisher(Imu, "imu/data_raw", 100)
         self.magPublisher = self.create_publisher(MagneticField, "imu/mag", 100)
         self.baroPublisher = self.create_publisher(Float32MultiArray, "baro", 100)
         self.eulerPublisher = self.create_publisher(Float32MultiArray, "euler", 100)
 
-        # create timer
-        self.timer = self.create_timer(0.1, self.pub_data)
+        # 0.01s = 100Hz，与模块回传频率对齐；定时器比模块慢会白白丢数据
+        self.timer = self.create_timer(0.01, self.pub_data)
 
 
     # pub data
@@ -119,7 +123,9 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        # Ctrl+C 退出时 destroy_node 后若不显式关 context，spin 会抛 wait set 报错
         node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
