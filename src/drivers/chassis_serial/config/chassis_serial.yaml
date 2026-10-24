@@ -1,0 +1,23 @@
+# 底盘串口桥参数。默认值与 vi_car.urdf 车体尺寸、config/nav2 限速一致。
+chassis_serial_node:
+  ros__parameters:
+    # 下位机串口。IMU 一般占 ttyUSB0，底盘接另一个 USB 口通常就是 ttyUSB1；
+    # 以后配了 udev 别名（如 /dev/mychassis）改这里即可
+    serial_port: "/dev/ttyUSB1"
+    serial_baud: 115200
+    publish_rate: 30.0        # 下发频率 Hz（Nav2 控制器 20Hz，略高留余量）
+    wheel_separation: 0.125   # 轮距 W (m)，与 URDF 一致
+    wheel_radius: 0.025       # 轮半径 r (m)，下位机换算轮转速 = 轮线速度 / r
+    max_lin_vel: 0.26         # 线速度限幅 (m/s)，与 nav2 max_vel_x 一致
+    max_ang_vel: 1.0          # 角速度限幅 (rad/s)，与 nav2 max_vel_theta 一致
+    cmd_timeout: 0.5          # /cmd_vel 断流超过该秒数自动发零速
+
+    # ---------- 编码器回传 / 里程计 ----------
+    # 轮轴转一圈对应的编码器计数（= 编码器线数 × 减速比，按下位机固件的计数口径填）。
+    # 0 = 忽略回传帧，不发布里程计
+    encoder_counts_per_rev: 0.0
+    # 导航模式(AMCL 写 map→odom，本节点补 odom→base_footprint)必须 true；
+    # 建图模式(cartographer 的 provide_odom_frame=true 自己发 odom TF)必须设 false，避免 TF 双写
+    publish_odom_tf: true
+    odom_frame: "odom"
+    base_frame: "base_footprint"
